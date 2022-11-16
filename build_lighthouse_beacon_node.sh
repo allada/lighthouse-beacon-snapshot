@@ -48,7 +48,7 @@ function install_prereq() {
   set -euxo pipefail
   # Basic installs.
   apt update
-  DEBIAN_FRONTEND=noninteractive apt install -y zfsutils-linux unzip pv jq make clang-12 cmake super
+  DEBIAN_FRONTEND=noninteractive apt install -y zfsutils-linux unzip pv jq make clang-12 cmake super protobuf-compiler
   # Use clang as our compiler by default if needed.
   ln -s $(which clang-12) /usr/bin/cc || true
 
@@ -56,6 +56,8 @@ function install_prereq() {
     # Install cargo.
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash /dev/stdin -y
     source "$HOME/.cargo/env"
+    rustup install 1.64.0
+    rustup default 1.64.0
   fi
 }
 
@@ -147,7 +149,7 @@ function install_lighthouse() {
   cd /lighthouse
   git clone https://github.com/sigp/lighthouse.git
   cd /lighthouse/lighthouse
-  git checkout v3.1.2
+  git checkout v3.2.1
 
   # The compile artifacts for lighthouse are large, so we create a temp zfs dataset to hold them
   # then destroy it.
