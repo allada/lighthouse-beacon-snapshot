@@ -31,33 +31,22 @@ function safe_wait() {
   done
 }
 
-# Utility function that will ensure one function with specific name will on system wide.
-# This will only have any effect if all other scripts use the same function.
-function mutex_function() {
-  local function_name="$1"
-  set -euxo pipefail
-
-  # Ensure only one instance of this function is running on entire system.
-  (
-    flock -x $fd
-    $function_name
-  ) {fd}>/tmp/$function_name.lock
+function required_lighthouse_apt_packages() {
+  echo zfsutils-linux unzip pv clang-12 make jq python3-boto3 super cmake protobuf-compiler
 }
 
 function install_prereq() {
   set -euxo pipefail
   # Basic installs.
   apt update
-  DEBIAN_FRONTEND=noninteractive apt install -y zfsutils-linux unzip pv jq make clang-12 cmake super protobuf-compiler
+  DEBIAN_FRONTEND=noninteractive apt install -y $(required_lighthouse_apt_packages)
   # Use clang as our compiler by default if needed.
   ln -s $(which clang-12) /usr/bin/cc || true
 
   if ! cargo --version 2>&1 >/dev/null ; then
     # Install cargo.
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash /dev/stdin -y
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash /dev/stdin -y --default-toolchain=1.64.0
     source "$HOME/.cargo/env"
-    rustup install 1.64.0
-    rustup default 1.64.0
   fi
 }
 
@@ -160,9 +149,10 @@ function install_lighthouse() {
   RUSTFLAGS="-C linker=clang-12" CMAKE_ASM_COMPILER=clang-12 CC=clang-12 CXX=clang++-12 CFLAGS="-O3" \
     cargo build --release --bin lighthouse
   mv /lighthouse/lighthouse/target/release/lighthouse /usr/bin/lighthouse
+  cd /
 }
 
-function download_snapshot() {
+function download_lighthouse_snapshot() {
   set -euxo pipefail
   zfs create -o mountpoint=none tank/lighthouse || true
   zfs create -o mountpoint=none tank/lighthouse/data || true
@@ -212,7 +202,7 @@ function run_lighthouse() {
   systemctl start lighthouse-beacon
 }
 
-function add_create_snapshot_script() {
+function add_create_lighthouse_snapshot_script() {
   set -euxo pipefail
   cat <<'EOT' > /lighthouse/create-lighthouse-snapshot.sh
 #!/bin/bash
@@ -240,22 +230,25 @@ EOT
   echo "create-lighthouse-snapshot     /lighthouse/create-lighthouse-snapshot.sh uid=root lighthouse" >> /etc/super.tab
 }
 
-mutex_function install_prereq
-mutex_function setup_drives
+# If we are in library mode we are just importing the functions without running them.
+if [[ "${LIGHTHOUSE_LIBRARY_MODE:-}" == "" ]]; then
+  install_prereq
+  setup_drives
 
-# Because we run our commands in a subshell we want to give cargo access to all future commands.
-source "$HOME/.cargo/env"
+  # Because we run our commands in a subshell we want to give cargo access to all future commands.
+  source "$HOME/.cargo/env"
 
-# These installations can happen in parallel.
-mutex_function install_zstd &
-mutex_function install_aws_cli &
-mutex_function install_s3pcp &
-safe_wait # Wait for our parallel jobs finish.
+  # These installations can happen in parallel.
+  install_zstd &
+  install_aws_cli &
+  install_s3pcp &
+  safe_wait # Wait for our parallel jobs finish.
 
-mutex_function download_snapshot &
-mutex_function install_lighthouse &
-safe_wait # Wait for our parallel jobs finish.
+  download_lighthouse_snapshot &
+  install_lighthouse &
+  safe_wait # Wait for our parallel jobs finish.
 
-mutex_function prepare_lighthouse
-mutex_function run_lighthouse
-mutex_function add_create_snapshot_script
+  prepare_lighthouse
+  run_lighthouse
+  add_create_lighthouse_snapshot_script
+fi
