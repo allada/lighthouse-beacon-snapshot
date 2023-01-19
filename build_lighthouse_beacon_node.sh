@@ -149,7 +149,7 @@ function install_lighthouse() {
   cd /lighthouse
   git clone https://github.com/sigp/lighthouse.git
   cd /lighthouse/lighthouse
-  git checkout v3.2.1
+  git checkout v3.4.0
 
   # The compile artifacts for lighthouse are large, so we create a temp zfs dataset to hold them
   # then destroy it.
