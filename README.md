@@ -1,3 +1,6 @@
+## Archived
+This is now archived because erigon has a native concensus layer built in now.
+
 # Ethereum Archive Node Snapshot Tools
 This repository holds the tools and commands that can be used to quickly deploy your own ETH Lighthouse node by downloading pre-built snapshots and installing them on an instance.
 
